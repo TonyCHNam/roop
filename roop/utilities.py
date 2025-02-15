@@ -15,7 +15,7 @@ import roop.globals
 TEMP_DIRECTORY = 'temp'
 TEMP_VIDEO_FILE = 'temp.mp4'
 
-# monkey patch ssl for mac
+# macOS에서 SSL 검증 우회를 위한 monkey patch
 if platform.system().lower() == 'darwin':
     ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -63,14 +63,13 @@ def extract_frames(target_path: str, fps: float = 30) -> bool:
 
 def create_video(target_path: str, fps: float = 30) -> bool:
     """
-    2-pass 인코딩과 preset 옵션 'placebo', 그리고 CRF 값을 12로 설정하여
-    가능한 최고 화질의 비디오를 생성합니다.
-    리소스 제약이 없다면 이 설정이 최상의 화질을 제공합니다.
+    x264 인코더(libx264)를 사용하여 2-pass 인코딩 방식으로 최상의 화질을 목표로 합니다.
+    - preset은 'placebo'로 설정하여 인코딩 최적화를 최대한 수행합니다.
+    - CRF 값은 12로 낮게 설정하여 화질을 극대화합니다.
     """
     temp_output_path = get_temp_output_path(target_path)
     temp_directory_path = get_temp_directory_path(target_path)
-    # CRF 값을 낮게 설정하여 최고 화질 (낮은 값일수록 화질이 좋음)
-    crf_value = 12
+    crf_value = 12  # 최상의 화질을 위해 낮은 CRF 값 사용
 
     # OS에 따른 null 디바이스 설정 (/dev/null: Linux/macOS, NUL: Windows)
     null_device = '/dev/null' if platform.system().lower() != 'windows' else 'NUL'
@@ -80,21 +79,14 @@ def create_video(target_path: str, fps: float = 30) -> bool:
         '-hwaccel', 'auto',
         '-r', str(fps),
         '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
-        '-c:v', roop.globals.output_video_encoder
+        '-c:v', 'libx264'
     ]
-    if roop.globals.output_video_encoder in ['libx264', 'libx265', 'libvpx']:
-        commands_pass1.extend([
-            '-preset', 'placebo',
-            '-crf', str(crf_value),
-            '-pass', '1',
-            '-an', '-f', 'null', null_device
-        ])
-    elif roop.globals.output_video_encoder in ['h264_nvenc', 'hevc_nvenc']:
-        commands_pass1.extend([
-            '-cq', str(crf_value),
-            '-pass', '1',
-            '-an', '-f', 'null', null_device
-        ])
+    commands_pass1.extend([
+        '-preset', 'placebo',
+        '-crf', str(crf_value),
+        '-pass', '1',
+        '-an', '-f', 'null', null_device
+    ])
     run_ffmpeg(commands_pass1)
 
     # 두 번째 pass: 최종 인코딩
@@ -102,19 +94,13 @@ def create_video(target_path: str, fps: float = 30) -> bool:
         '-hwaccel', 'auto',
         '-r', str(fps),
         '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
-        '-c:v', roop.globals.output_video_encoder
+        '-c:v', 'libx264'
     ]
-    if roop.globals.output_video_encoder in ['libx264', 'libx265', 'libvpx']:
-        commands_pass2.extend([
-            '-preset', 'placebo',
-            '-crf', str(crf_value),
-            '-pass', '2'
-        ])
-    elif roop.globals.output_video_encoder in ['h264_nvenc', 'hevc_nvenc']:
-        commands_pass2.extend([
-            '-cq', str(crf_value),
-            '-pass', '2'
-        ])
+    commands_pass2.extend([
+        '-preset', 'placebo',
+        '-crf', str(crf_value),
+        '-pass', '2'
+    ])
     commands_pass2.extend([
         '-pix_fmt', 'yuv420p',
         '-vf', 'colorspace=bt709:iall=bt601-6-625:fast=1',
@@ -216,6 +202,3 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
 
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
-
-
-
