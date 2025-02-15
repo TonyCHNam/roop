@@ -22,6 +22,9 @@ from roop.predictor import predict_image, predict_video
 from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
 
+# 추가: 후처리 모듈 import (Real-ESRGAN 기반 슈퍼해상도 적용)
+import post_processing
+
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
 warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
 
@@ -197,6 +200,16 @@ def start() -> None:
         update_status('Processing to video succeed!')
     else:
         update_status('Processing to video failed!')
+
+    # --------------------------
+    # 후처리: Super Resolution 적용
+    # roop.globals.output_path에 최종 스왑 영상 파일 경로가 저장되어 있다고 가정
+    if roop.globals.output_path and os.path.isfile(roop.globals.output_path):
+        enhanced_output = roop.globals.output_path.replace('.mp4', '_enhanced.mp4')
+        update_status("Starting super resolution post-processing...", scope="POST_PROCESSING")
+        post_processing.enhance_video(roop.globals.output_path, enhanced_output, scale=2, device='cuda')
+        update_status(f"Enhanced video saved to {enhanced_output}", scope="POST_PROCESSING")
+    # --------------------------
 
 
 def destroy() -> None:
