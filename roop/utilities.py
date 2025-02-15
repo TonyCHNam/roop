@@ -64,21 +64,20 @@ def extract_frames(target_path: str, fps: float = 30) -> bool:
 def create_video(target_path: str, fps: float = 30) -> bool:
     """
     단일 pass 인코딩을 사용하여 호환성이 높은 MP4 파일을 생성합니다.
-    - libx264 인코더를 사용합니다.
-    - -movflags +faststart, -profile:v main, -level:v 3.1 옵션을 추가하여
-      표준 프로파일 및 호환성을 강화합니다.
-    - 오디오는 AAC 코덱으로 인코딩하여 호환성을 높입니다.
+    - libx264 인코더를 사용하여 인코딩합니다.
+    - -movflags +faststart, -profile:v main, -level:v 3.1 옵션을 추가해 표준 프로파일 및 호환성을 강화합니다.
+    - 오디오는 AAC 코덱(-c:a aac -b:a 128k)으로 인코딩합니다.
     """
     temp_output_path = get_temp_output_path(target_path)
     temp_directory_path = get_temp_directory_path(target_path)
-    crf_value = 18  # 최상의 화질과 파일 크기 사이의 균형 (더 낮은 값: 높은 화질, 파일 크기 증가)
+    crf_value = 18  # 최상의 화질과 파일 크기 균형 (낮을수록 화질이 좋지만 파일 크기가 커짐)
 
     commands = [
         '-hwaccel', 'auto',
         '-r', str(fps),
         '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
         '-c:v', 'libx264',
-        '-preset', 'slow',  # slow preset: 품질을 우선시
+        '-preset', 'slow',  # slow preset: 품질 우선
         '-crf', str(crf_value),
         '-c:a', 'aac',
         '-b:a', '128k',
