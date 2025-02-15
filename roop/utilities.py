@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
 
-from realesrgan import RealESRGAN  # pip install realesrgan
+from realesrgan import RealESRGANer  # pip install realesrgan
 
 import roop.globals
 
@@ -43,7 +43,7 @@ def enhance_video(input_video: str, output_video: str, scale: int = 2, device: s
     :param device: 사용할 디바이스 ('cuda' 또는 'cpu')
     """
     # RealESRGAN 모델 초기화 (scale에 따라 모델 파일이 달라집니다)
-    model = RealESRGAN(device, scale=scale)
+    model = RealESRGANer(device, scale=scale)
     
     model_path = f"RealESRGAN_x{scale}.pth"
     # 모델 가중치 파일이 없으면 자동 다운로드 (Colab 환경용)
