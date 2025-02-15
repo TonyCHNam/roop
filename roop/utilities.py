@@ -7,7 +7,7 @@ import platform
 import shutil
 import ssl
 import subprocess
-import urllib
+import urllib.request
 from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
@@ -17,8 +17,22 @@ from realesrgan import RealESRGAN  # pip install realesrgan
 import roop.globals
 
 # -------------------------------
-# post_processing.py의 enhance_video 함수
+# post_processing.py의 enhance_video 함수 (자동 다운로드 기능 추가)
 # -------------------------------
+
+def download_model(model_path: str, url: str) -> bool:
+    """
+    주어진 URL에서 모델 파일을 다운로드하여 model_path에 저장합니다.
+    """
+    try:
+        print(f"Downloading {model_path} ...")
+        urllib.request.urlretrieve(url, model_path)
+        print("Download completed.")
+        return True
+    except Exception as e:
+        print(f"Error downloading model: {e}")
+        return False
+
 def enhance_video(input_video: str, output_video: str, scale: int = 2, device: str = 'cuda') -> None:
     """
     Real-ESRGAN을 사용하여 input_video를 super-resolution 처리한 후 output_video로 저장합니다.
@@ -31,13 +45,13 @@ def enhance_video(input_video: str, output_video: str, scale: int = 2, device: s
     # RealESRGAN 모델 초기화 (scale에 따라 모델 파일이 달라집니다)
     model = RealESRGAN(device, scale=scale)
     
-    # 모델 가중치 다운로드 및 로드 (가중치 파일이 없으면 자동 다운로드합니다)
-    # 여기서는 x2 모델 예시. 다른 배율은 해당 모델 파일 이름을 사용하세요.
-    model_path = f'RealESRGAN_x{scale}.pth'
+    model_path = f"RealESRGAN_x{scale}.pth"
+    # 모델 가중치 파일이 없으면 자동 다운로드 (Colab 환경용)
     if not os.path.exists(model_path):
-        # 모델 파일이 없으면 자동 다운로드 (실제 프로젝트에 맞게 다운로드 코드를 추가할 수 있음)
-        print(f"{model_path} not found. Please download the model file manually.")
-        return
+        download_url = f"https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5/RealESRGAN_x{scale}.pth"
+        if not download_model(model_path, download_url):
+            print(f"Failed to download {model_path}.")
+            return
     model.load_weights(model_path)
 
     cap = cv2.VideoCapture(input_video)
@@ -84,7 +98,6 @@ TEMP_VIDEO_FILE = 'temp.mp4'
 if platform.system().lower() == 'darwin':
     ssl._create_default_https_context = ssl._create_unverified_context
 
-
 def run_ffmpeg(args: List[str]) -> bool:
     commands = ['ffmpeg', '-hide_banner', '-loglevel', roop.globals.log_level]
     commands.extend(args)
@@ -94,7 +107,6 @@ def run_ffmpeg(args: List[str]) -> bool:
     except Exception:
         pass
     return False
-
 
 def detect_fps(target_path: str) -> float:
     command = [
@@ -112,7 +124,6 @@ def detect_fps(target_path: str) -> float:
         pass
     return 30
 
-
 def extract_frames(target_path: str, fps: float = 30) -> bool:
     temp_directory_path = get_temp_directory_path(target_path)
     temp_frame_quality = roop.globals.temp_frame_quality * 31 // 100
@@ -124,7 +135,6 @@ def extract_frames(target_path: str, fps: float = 30) -> bool:
         '-vf', 'fps=' + str(fps),
         os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format)
     ])
-
 
 def create_video(target_path: str, fps: float = 30) -> bool:
     """
@@ -142,7 +152,7 @@ def create_video(target_path: str, fps: float = 30) -> bool:
         '-r', str(fps),
         '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
         '-c:v', 'libx264',
-        '-preset', 'slow',  # slow preset: 품질 우선
+        '-preset', 'slow',
         '-crf', str(crf_value),
         '-c:a', 'aac',
         '-b:a', '128k',
@@ -153,7 +163,6 @@ def create_video(target_path: str, fps: float = 30) -> bool:
         '-y', temp_output_path
     ]
     return run_ffmpeg(commands)
-
 
 def restore_audio(target_path: str, output_path: str) -> None:
     temp_output_path = get_temp_output_path(target_path)
@@ -168,22 +177,18 @@ def restore_audio(target_path: str, output_path: str) -> None:
     if not done:
         move_temp(target_path, output_path)
 
-
 def get_temp_frame_paths(target_path: str) -> List[str]:
     temp_directory_path = get_temp_directory_path(target_path)
     return glob.glob(os.path.join(glob.escape(temp_directory_path), '*.' + roop.globals.temp_frame_format))
-
 
 def get_temp_directory_path(target_path: str) -> str:
     target_name, _ = os.path.splitext(os.path.basename(target_path))
     target_directory_path = os.path.dirname(target_path)
     return os.path.join(target_directory_path, TEMP_DIRECTORY, target_name)
 
-
 def get_temp_output_path(target_path: str) -> str:
     temp_directory_path = get_temp_directory_path(target_path)
     return os.path.join(temp_directory_path, TEMP_VIDEO_FILE)
-
 
 def normalize_output_path(source_path: str, target_path: str, output_path: str) -> Optional[str]:
     if source_path and target_path and output_path:
@@ -193,11 +198,9 @@ def normalize_output_path(source_path: str, target_path: str, output_path: str) 
             return os.path.join(output_path, source_name + '-' + target_name + target_extension)
     return output_path
 
-
 def create_temp(target_path: str) -> None:
     temp_directory_path = get_temp_directory_path(target_path)
     Path(temp_directory_path).mkdir(parents=True, exist_ok=True)
-
 
 def move_temp(target_path: str, output_path: str) -> None:
     temp_output_path = get_temp_output_path(target_path)
@@ -205,7 +208,6 @@ def move_temp(target_path: str, output_path: str) -> None:
         if os.path.isfile(output_path):
             os.remove(output_path)
         shutil.move(temp_output_path, output_path)
-
 
 def clean_temp(target_path: str) -> None:
     temp_directory_path = get_temp_directory_path(target_path)
@@ -215,10 +217,8 @@ def clean_temp(target_path: str) -> None:
     if os.path.exists(parent_directory_path) and not os.listdir(parent_directory_path):
         os.rmdir(parent_directory_path)
 
-
 def has_image_extension(image_path: str) -> bool:
     return image_path.lower().endswith(('png', 'jpg', 'jpeg', 'webp'))
-
 
 def is_image(image_path: str) -> bool:
     if image_path and os.path.isfile(image_path):
@@ -226,13 +226,11 @@ def is_image(image_path: str) -> bool:
         return bool(mimetype and mimetype.startswith('image/'))
     return False
 
-
 def is_video(video_path: str) -> bool:
     if video_path and os.path.isfile(video_path):
         mimetype, _ = mimetypes.guess_type(video_path)
         return bool(mimetype and mimetype.startswith('video/'))
     return False
-
 
 def conditional_download(download_directory_path: str, urls: List[str]) -> None:
     if not os.path.exists(download_directory_path):
@@ -249,6 +247,6 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
                     reporthook=lambda count, block_size, total_size: progress.update(block_size)
                 )  # type: ignore[attr-defined]
 
-
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
+
