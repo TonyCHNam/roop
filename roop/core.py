@@ -25,11 +25,8 @@ from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import (
     has_image_extension, is_image, is_video, detect_fps, create_video, 
     extract_frames, get_temp_frame_paths, restore_audio, create_temp, 
-    move_temp, clean_temp, normalize_output_path
+    move_temp, clean_temp, normalize_output_path, enhance_video
 )
-
-# 후처리 모듈 import (이제 sys.path에 현재 디렉토리가 추가되어 post_processing.py를 찾을 수 있음)
-import post_processing
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
 warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
@@ -157,7 +154,7 @@ def start() -> None:
         else:
             update_status('Processing to image failed!')
         return
-    # process image to videos
+    # process image to video
     if predict_video(roop.globals.target_path):
         destroy()
     update_status('Creating temporary resources...')
@@ -212,7 +209,7 @@ def start() -> None:
     if roop.globals.output_path and os.path.isfile(roop.globals.output_path):
         enhanced_output = roop.globals.output_path.replace('.mp4', '_enhanced.mp4')
         update_status("Starting super resolution post-processing...", scope="POST_PROCESSING")
-        post_processing.enhance_video(roop.globals.output_path, enhanced_output, scale=2, device='cuda')
+        enhance_video(roop.globals.output_path, enhanced_output, scale=2, device='cuda')
         update_status(f"Enhanced video saved to {enhanced_output}", scope="POST_PROCESSING")
 
 
@@ -235,3 +232,7 @@ def run() -> None:
     else:
         window = ui.init(start, destroy)
         window.mainloop()
+
+
+if __name__ == '__main__':
+    run()
