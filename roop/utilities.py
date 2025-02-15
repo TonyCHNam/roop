@@ -62,20 +62,13 @@ def extract_frames(target_path: str, fps: float = 30) -> bool:
 
 
 def create_video(target_path: str, fps: float = 30) -> bool:
-    """
-    x264 인코더(libx264)를 사용하여 2-pass 인코딩 방식으로 최고 화질의 비디오를 생성합니다.
-    - preset은 'placebo'로 설정하여 최대한 최적화합니다.
-    - CRF 값은 12로 설정하여 화질을 극대화합니다.
-    - 두 번째 pass에서 -movflags +faststart 옵션을 추가하여 MP4 파일의 호환성을 개선합니다.
-    """
     temp_output_path = get_temp_output_path(target_path)
     temp_directory_path = get_temp_directory_path(target_path)
-    crf_value = 12  # 최고 화질을 위한 낮은 CRF 값
+    crf_value = 14  # 약간 올린 CRF 값으로 조정 (12보다 호환성이 높을 수 있음)
 
-    # OS에 따른 null 디바이스 설정 (/dev/null: Linux/macOS, NUL: Windows)
     null_device = '/dev/null' if platform.system().lower() != 'windows' else 'NUL'
 
-    # 첫 번째 pass: 통계 정보 수집
+    # 첫 번째 pass (통계 수집)
     commands_pass1 = [
         '-hwaccel', 'auto',
         '-r', str(fps),
@@ -88,7 +81,7 @@ def create_video(target_path: str, fps: float = 30) -> bool:
     ]
     run_ffmpeg(commands_pass1)
 
-    # 두 번째 pass: 최종 인코딩 (색상 필터 제거, -movflags +faststart 추가)
+    # 두 번째 pass (최종 인코딩) - 호환성 옵션 추가
     commands_pass2 = [
         '-hwaccel', 'auto',
         '-r', str(fps),
@@ -99,10 +92,11 @@ def create_video(target_path: str, fps: float = 30) -> bool:
         '-pass', '2',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
+        '-profile:v', 'high',
+        '-level:v', '4.0',
         '-y', temp_output_path
     ]
     return run_ffmpeg(commands_pass2)
-
 
 def restore_audio(target_path: str, output_path: str) -> None:
     temp_output_path = get_temp_output_path(target_path)
