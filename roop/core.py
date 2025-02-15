@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
-import os
 import sys
-# 현재 파일이 속한 디렉토리를 모듈 검색 경로에 추가 (post_processing.py를 찾기 위함)
+import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
 # single thread doubles cuda performance - needs to be set before torch import
