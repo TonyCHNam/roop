@@ -32,7 +32,13 @@ def run_ffmpeg(args: List[str]) -> bool:
 
 
 def detect_fps(target_path: str) -> float:
-    command = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate', '-of', 'default=noprint_wrappers=1:nokey=1', target_path]
+    command = [
+        'ffprobe', '-v', 'error',
+        '-select_streams', 'v:0',
+        '-show_entries', 'stream=r_frame_rate',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        target_path
+    ]
     output = subprocess.check_output(command).decode().strip().split('/')
     try:
         numerator, denominator = map(int, output)
@@ -45,32 +51,57 @@ def detect_fps(target_path: str) -> float:
 def extract_frames(target_path: str, fps: float = 30) -> bool:
     temp_directory_path = get_temp_directory_path(target_path)
     temp_frame_quality = roop.globals.temp_frame_quality * 31 // 100
-    return run_ffmpeg(['-hwaccel', 'auto', '-i', target_path, '-q:v', str(temp_frame_quality), '-pix_fmt', 'rgb24', '-vf', 'fps=' + str(fps), os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format)])
+    return run_ffmpeg([
+        '-hwaccel', 'auto',
+        '-i', target_path,
+        '-q:v', str(temp_frame_quality),
+        '-pix_fmt', 'rgb24',
+        '-vf', 'fps=' + str(fps),
+        os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format)
+    ])
 
 
 def create_video(target_path: str, fps: float = 30) -> bool:
     temp_output_path = get_temp_output_path(target_path)
     temp_directory_path = get_temp_directory_path(target_path)
+    # output_video_quality는 0~100 범위의 입력 값을 기반으로 CRF 값으로 변환됨 (낮을수록 화질이 좋음)
     output_video_quality = (roop.globals.output_video_quality + 1) * 51 // 100
-    commands = ['-hwaccel', 'auto', '-r', str(fps), '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format), '-c:v', roop.globals.output_video_encoder]
+    commands = [
+        '-hwaccel', 'auto',
+        '-r', str(fps),
+        '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
+        '-c:v', roop.globals.output_video_encoder
+    ]
     if roop.globals.output_video_encoder in ['libx264', 'libx265', 'libvpx']:
-        commands.extend(['-crf', str(output_video_quality)])
+        # -crf 값과 함께 preset 옵션을 slow로 추가하여 화질 개선 (preset 옵션은 인코딩 시간이 늘어납니다)
+        commands.extend(['-crf', str(output_video_quality), '-preset', 'slow'])
     if roop.globals.output_video_encoder in ['h264_nvenc', 'hevc_nvenc']:
         commands.extend(['-cq', str(output_video_quality)])
-    commands.extend(['-pix_fmt', 'yuv420p', '-vf', 'colorspace=bt709:iall=bt601-6-625:fast=1', '-y', temp_output_path])
+    commands.extend([
+        '-pix_fmt', 'yuv420p',
+        '-vf', 'colorspace=bt709:iall=bt601-6-625:fast=1',
+        '-y', temp_output_path
+    ])
     return run_ffmpeg(commands)
 
 
 def restore_audio(target_path: str, output_path: str) -> None:
     temp_output_path = get_temp_output_path(target_path)
-    done = run_ffmpeg(['-i', temp_output_path, '-i', target_path, '-c:v', 'copy', '-map', '0:v:0', '-map', '1:a:0', '-y', output_path])
+    done = run_ffmpeg([
+        '-i', temp_output_path,
+        '-i', target_path,
+        '-c:v', 'copy',
+        '-map', '0:v:0',
+        '-map', '1:a:0',
+        '-y', output_path
+    ])
     if not done:
         move_temp(target_path, output_path)
 
 
 def get_temp_frame_paths(target_path: str) -> List[str]:
     temp_directory_path = get_temp_directory_path(target_path)
-    return glob.glob((os.path.join(glob.escape(temp_directory_path), '*.' + roop.globals.temp_frame_format)))
+    return glob.glob(os.path.join(glob.escape(temp_directory_path), '*.' + roop.globals.temp_frame_format))
 
 
 def get_temp_directory_path(target_path: str) -> str:
@@ -147,3 +178,4 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
 
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
+
