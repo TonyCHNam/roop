@@ -62,41 +62,34 @@ def extract_frames(target_path: str, fps: float = 30) -> bool:
 
 
 def create_video(target_path: str, fps: float = 30) -> bool:
+    """
+    단일 pass 인코딩을 사용하여 호환성이 높은 MP4 파일을 생성합니다.
+    - libx264 인코더를 사용합니다.
+    - -movflags +faststart, -profile:v main, -level:v 3.1 옵션을 추가하여
+      표준 프로파일 및 호환성을 강화합니다.
+    - 오디오는 AAC 코덱으로 인코딩하여 호환성을 높입니다.
+    """
     temp_output_path = get_temp_output_path(target_path)
     temp_directory_path = get_temp_directory_path(target_path)
-    crf_value = 14  # 약간 올린 CRF 값으로 조정 (12보다 호환성이 높을 수 있음)
+    crf_value = 18  # 최상의 화질과 파일 크기 사이의 균형 (더 낮은 값: 높은 화질, 파일 크기 증가)
 
-    null_device = '/dev/null' if platform.system().lower() != 'windows' else 'NUL'
-
-    # 첫 번째 pass (통계 수집)
-    commands_pass1 = [
+    commands = [
         '-hwaccel', 'auto',
         '-r', str(fps),
         '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
         '-c:v', 'libx264',
-        '-preset', 'placebo',
+        '-preset', 'slow',  # slow preset: 품질을 우선시
         '-crf', str(crf_value),
-        '-pass', '1',
-        '-an', '-f', 'null', null_device
-    ]
-    run_ffmpeg(commands_pass1)
-
-    # 두 번째 pass (최종 인코딩) - 호환성 옵션 추가
-    commands_pass2 = [
-        '-hwaccel', 'auto',
-        '-r', str(fps),
-        '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
-        '-c:v', 'libx264',
-        '-preset', 'placebo',
-        '-crf', str(crf_value),
-        '-pass', '2',
+        '-c:a', 'aac',
+        '-b:a', '128k',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
-        '-profile:v', 'high',
-        '-level:v', '4.0',
+        '-profile:v', 'main',
+        '-level:v', '3.1',
         '-y', temp_output_path
     ]
-    return run_ffmpeg(commands_pass2)
+    return run_ffmpeg(commands)
+
 
 def restore_audio(target_path: str, output_path: str) -> None:
     temp_output_path = get_temp_output_path(target_path)
@@ -195,4 +188,3 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
 
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
-
