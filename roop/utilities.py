@@ -17,7 +17,7 @@ from realesrgan import RealESRGAN  # pip install realesrgan
 import roop.globals
 
 # -------------------------------
-# post_processing.py의 enhance_video 함수 (자동 다운로드 기능 추가)
+# post_processing.py의 enhance_video 함수 (자동 다운로드 기능 추가 및 모델 URL 수정)
 # -------------------------------
 
 def download_model(model_path: str, url: str) -> bool:
@@ -25,7 +25,7 @@ def download_model(model_path: str, url: str) -> bool:
     주어진 URL에서 모델 파일을 다운로드하여 model_path에 저장합니다.
     """
     try:
-        print(f"Downloading {model_path} ...")
+        print(f"Downloading {model_path} from {url} ...")
         urllib.request.urlretrieve(url, model_path)
         print("Download completed.")
         return True
@@ -48,7 +48,8 @@ def enhance_video(input_video: str, output_video: str, scale: int = 2, device: s
     model_path = f"RealESRGAN_x{scale}.pth"
     # 모델 가중치 파일이 없으면 자동 다운로드 (Colab 환경용)
     if not os.path.exists(model_path):
-        download_url = f"https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5/RealESRGAN_x{scale}.pth"
+        # 제공된 URL을 사용하여 모델 파일을 다운로드합니다.
+        download_url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-animevideov3.pth"
         if not download_model(model_path, download_url):
             print(f"Failed to download {model_path}.")
             return
@@ -249,4 +250,3 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
 
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
-
