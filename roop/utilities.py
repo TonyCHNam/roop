@@ -12,12 +12,12 @@ from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
 
-from realesrgan import RealESRGANer  # pip install realesrgan
+from realesrgan import RealESRGANer  # 최신 버전에서는 RealESRGANer를 사용합니다.
 
 import roop.globals
 
 # -------------------------------
-# post_processing.py의 enhance_video 함수 (자동 다운로드 기능 추가 및 모델 URL 수정)
+# post_processing.py의 enhance_video 함수 (자동 다운로드 기능 및 일반용 x4 모델 적용)
 # -------------------------------
 
 def download_model(model_path: str, url: str) -> bool:
@@ -33,23 +33,23 @@ def download_model(model_path: str, url: str) -> bool:
         print(f"Error downloading model: {e}")
         return False
 
-def enhance_video(input_video: str, output_video: str, scale: int = 2, device: str = 'cuda') -> None:
+def enhance_video(input_video: str, output_video: str, scale: int = 4, device: str = 'cuda') -> None:
     """
     Real-ESRGAN을 사용하여 input_video를 super-resolution 처리한 후 output_video로 저장합니다.
     
     :param input_video: 원본 영상 파일 경로
     :param output_video: 후처리된 영상 파일 경로
-    :param scale: 업스케일 배율 (일반적으로 2 또는 4)
+    :param scale: 업스케일 배율 (일반적으로 2 또는 4; 여기서는 4 사용)
     :param device: 사용할 디바이스 ('cuda' 또는 'cpu')
     """
-    # RealESRGAN 모델 초기화 (scale에 따라 모델 파일이 달라집니다)
+    # RealESRGANer 모델 초기화 (일반용 x4 모델 사용)
     model = RealESRGANer(device, scale=scale)
     
     model_path = f"RealESRGAN_x{scale}.pth"
     # 모델 가중치 파일이 없으면 자동 다운로드 (Colab 환경용)
     if not os.path.exists(model_path):
-        # 제공된 URL을 사용하여 모델 파일을 다운로드합니다.
-        download_url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-animevideov3.pth"
+        # 일반용 x4 모델 URL
+        download_url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
         if not download_model(model_path, download_url):
             print(f"Failed to download {model_path}.")
             return
@@ -77,8 +77,8 @@ def enhance_video(input_video: str, output_video: str, scale: int = 2, device: s
         if not ret:
             break
 
-        # Real-ESRGAN으로 프레임 업스케일 (cv2에서 BGR 형식)
-        sr_frame = model.predict(frame)  # 모델에 따라 predict 함수 사용
+        # Real-ESRGANer로 프레임 업스케일 (cv2는 BGR 형식)
+        sr_frame = model.predict(frame)  # 모델의 predict 함수를 사용
         out.write(sr_frame)
         frame_idx += 1
         if frame_idx % 10 == 0:
@@ -250,3 +250,4 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
 
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
+
