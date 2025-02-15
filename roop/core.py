@@ -2,6 +2,9 @@
 
 import os
 import sys
+# 현재 파일이 속한 디렉토리를 모듈 검색 경로에 추가 (post_processing.py를 찾기 위함)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+
 # single thread doubles cuda performance - needs to be set before torch import
 if any(arg.startswith('--execution-provider') for arg in sys.argv):
     os.environ['OMP_NUM_THREADS'] = '1'
@@ -20,9 +23,13 @@ import roop.metadata
 import roop.ui as ui
 from roop.predictor import predict_image, predict_video
 from roop.processors.frame.core import get_frame_processors_modules
-from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
+from roop.utilities import (
+    has_image_extension, is_image, is_video, detect_fps, create_video, 
+    extract_frames, get_temp_frame_paths, restore_audio, create_temp, 
+    move_temp, clean_temp, normalize_output_path
+)
 
-# 추가: 후처리 모듈 import (Real-ESRGAN 기반 슈퍼해상도 적용)
+# 후처리 모듈 import (이제 sys.path에 현재 디렉토리가 추가되어 post_processing.py를 찾을 수 있음)
 import post_processing
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
@@ -201,7 +208,6 @@ def start() -> None:
     else:
         update_status('Processing to video failed!')
 
-    # --------------------------
     # 후처리: Super Resolution 적용
     # roop.globals.output_path에 최종 스왑 영상 파일 경로가 저장되어 있다고 가정
     if roop.globals.output_path and os.path.isfile(roop.globals.output_path):
@@ -209,7 +215,6 @@ def start() -> None:
         update_status("Starting super resolution post-processing...", scope="POST_PROCESSING")
         post_processing.enhance_video(roop.globals.output_path, enhanced_output, scale=2, device='cuda')
         update_status(f"Enhanced video saved to {enhanced_output}", scope="POST_PROCESSING")
-    # --------------------------
 
 
 def destroy() -> None:
