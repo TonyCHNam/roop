@@ -63,13 +63,14 @@ def extract_frames(target_path: str, fps: float = 30) -> bool:
 
 def create_video(target_path: str, fps: float = 30) -> bool:
     """
-    x264 인코더(libx264)를 사용하여 2-pass 인코딩 방식으로 최상의 화질을 목표로 합니다.
-    - preset은 'placebo'로 설정하여 인코딩 최적화를 최대한 수행합니다.
-    - CRF 값은 12로 낮게 설정하여 화질을 극대화합니다.
+    x264 인코더(libx264)를 사용하여 2-pass 인코딩 방식으로 최고 화질의 비디오를 생성합니다.
+    - preset은 'placebo'로 설정하여 최대한 최적화합니다.
+    - CRF 값은 12로 설정하여 화질을 극대화합니다.
+    - 두 번째 pass에서 -movflags +faststart 옵션을 추가하여 MP4 파일의 호환성을 개선합니다.
     """
     temp_output_path = get_temp_output_path(target_path)
     temp_directory_path = get_temp_directory_path(target_path)
-    crf_value = 12  # 최상의 화질을 위해 낮은 CRF 값 사용
+    crf_value = 12  # 최고 화질을 위한 낮은 CRF 값
 
     # OS에 따른 null 디바이스 설정 (/dev/null: Linux/macOS, NUL: Windows)
     null_device = '/dev/null' if platform.system().lower() != 'windows' else 'NUL'
@@ -79,33 +80,27 @@ def create_video(target_path: str, fps: float = 30) -> bool:
         '-hwaccel', 'auto',
         '-r', str(fps),
         '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
-        '-c:v', 'libx264'
-    ]
-    commands_pass1.extend([
+        '-c:v', 'libx264',
         '-preset', 'placebo',
         '-crf', str(crf_value),
         '-pass', '1',
         '-an', '-f', 'null', null_device
-    ])
+    ]
     run_ffmpeg(commands_pass1)
 
-    # 두 번째 pass: 최종 인코딩
+    # 두 번째 pass: 최종 인코딩 (색상 필터 제거, -movflags +faststart 추가)
     commands_pass2 = [
         '-hwaccel', 'auto',
         '-r', str(fps),
         '-i', os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format),
-        '-c:v', 'libx264'
-    ]
-    commands_pass2.extend([
+        '-c:v', 'libx264',
         '-preset', 'placebo',
         '-crf', str(crf_value),
-        '-pass', '2'
-    ])
-    commands_pass2.extend([
+        '-pass', '2',
         '-pix_fmt', 'yuv420p',
-        '-vf', 'colorspace=bt709:iall=bt601-6-625:fast=1',
+        '-movflags', '+faststart',
         '-y', temp_output_path
-    ])
+    ]
     return run_ffmpeg(commands_pass2)
 
 
@@ -197,8 +192,13 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
             request = urllib.request.urlopen(url)  # type: ignore[attr-defined]
             total = int(request.headers.get('Content-Length', 0))
             with tqdm(total=total, desc='Downloading', unit='B', unit_scale=True, unit_divisor=1024) as progress:
-                urllib.request.urlretrieve(url, download_file_path, reporthook=lambda count, block_size, total_size: progress.update(block_size))  # type: ignore[attr-defined]
+                urllib.request.urlretrieve(
+                    url,
+                    download_file_path,
+                    reporthook=lambda count, block_size, total_size: progress.update(block_size)
+                )  # type: ignore[attr-defined]
 
 
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
+
