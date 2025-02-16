@@ -7,90 +7,18 @@ import platform
 import shutil
 import ssl
 import subprocess
-import urllib.request
+import urllib
 from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
 
-from realesrgan import RealESRGANer  # 최신 버전에서는 RealESRGANer를 사용합니다.
+from realesrgan import RealESRGAN  # pip install realesrgan
 
 import roop.globals
 
-# -------------------------------
-# post_processing.py의 enhance_video 함수 (자동 다운로드 기능 및 일반용 x4 모델 적용)
-# -------------------------------
-
-def download_model(model_path: str, url: str) -> bool:
-    """
-    주어진 URL에서 모델 파일을 다운로드하여 model_path에 저장합니다.
-    """
-    try:
-        print(f"Downloading {model_path} from {url} ...")
-        urllib.request.urlretrieve(url, model_path)
-        print("Download completed.")
-        return True
-    except Exception as e:
-        print(f"Error downloading model: {e}")
-        return False
-
-def enhance_video(input_video: str, output_video: str, scale: int = 4, device: str = 'cuda') -> None:
-    """
-    Real-ESRGAN을 사용하여 input_video를 super-resolution 처리한 후 output_video로 저장합니다.
-    
-    :param input_video: 원본 영상 파일 경로
-    :param output_video: 후처리된 영상 파일 경로
-    :param scale: 업스케일 배율 (일반적으로 2 또는 4; 여기서는 4 사용)
-    :param device: 사용할 디바이스 ('cuda' 또는 'cpu')
-    """
-    # RealESRGANer 모델 초기화 (일반용 x4 모델 사용)
-    model = RealESRGANer(device, scale=scale)
-    
-    model_path = f"RealESRGAN_x{scale}.pth"
-    # 모델 가중치 파일이 없으면 자동 다운로드 (Colab 환경용)
-    if not os.path.exists(model_path):
-        # 일반용 x4 모델 URL
-        download_url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
-        if not download_model(model_path, download_url):
-            print(f"Failed to download {model_path}.")
-            return
-    model.load_weights(model_path)
-
-    cap = cv2.VideoCapture(input_video)
-    if not cap.isOpened():
-        print("Error: Unable to open input video.")
-        return
-
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * scale
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) * scale
-
-    # 호환성을 위해 mp4 컨테이너와 적절한 코덱 사용 (예: 'mp4v')
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
-
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print(f"Total frames: {frame_count}")
-    
-    frame_idx = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        # Real-ESRGANer로 프레임 업스케일 (cv2는 BGR 형식)
-        sr_frame = model.predict(frame)  # 모델의 predict 함수를 사용
-        out.write(sr_frame)
-        frame_idx += 1
-        if frame_idx % 10 == 0:
-            print(f"Processed {frame_idx}/{frame_count} frames")
-    
-    cap.release()
-    out.release()
-    print("Super resolution processing completed!")
-
-# -------------------------------
-# utilities.py의 기타 함수들
-# -------------------------------
+# =====================================================
+# 기존 함수들
+# =====================================================
 
 TEMP_DIRECTORY = 'temp'
 TEMP_VIDEO_FILE = 'temp.mp4'
@@ -140,14 +68,10 @@ def extract_frames(target_path: str, fps: float = 30) -> bool:
 def create_video(target_path: str, fps: float = 30) -> bool:
     """
     단일 pass 인코딩을 사용하여 호환성이 높은 MP4 파일을 생성합니다.
-    - libx264 인코더를 사용하여 인코딩합니다.
-    - -movflags +faststart, -profile:v main, -level:v 3.1 옵션을 추가해 표준 프로파일 및 호환성을 강화합니다.
-    - 오디오는 AAC 코덱(-c:a aac -b:a 128k)으로 인코딩합니다.
     """
     temp_output_path = get_temp_output_path(target_path)
     temp_directory_path = get_temp_directory_path(target_path)
-    crf_value = 18  # 최상의 화질과 파일 크기 균형 (낮을수록 화질이 좋지만 파일 크기가 커짐)
-
+    crf_value = 18  # 최상의 화질과 파일 크기 균형
     commands = [
         '-hwaccel', 'auto',
         '-r', str(fps),
@@ -213,7 +137,7 @@ def move_temp(target_path: str, output_path: str) -> None:
 def clean_temp(target_path: str) -> None:
     temp_directory_path = get_temp_directory_path(target_path)
     parent_directory_path = os.path.dirname(temp_directory_path)
-    if not roop.globals.keep_frames and os.path.isdir(temp_directory_path):
+    if os.path.exists(temp_directory_path) and not roop.globals.keep_frames:
         shutil.rmtree(temp_directory_path)
     if os.path.exists(parent_directory_path) and not os.listdir(parent_directory_path):
         os.rmdir(parent_directory_path)
@@ -239,15 +163,85 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
     for url in urls:
         download_file_path = os.path.join(download_directory_path, os.path.basename(url))
         if not os.path.exists(download_file_path):
-            request = urllib.request.urlopen(url)  # type: ignore[attr-defined]
+            request = urllib.request.urlopen(url)
             total = int(request.headers.get('Content-Length', 0))
             with tqdm(total=total, desc='Downloading', unit='B', unit_scale=True, unit_divisor=1024) as progress:
                 urllib.request.urlretrieve(
                     url,
                     download_file_path,
                     reporthook=lambda count, block_size, total_size: progress.update(block_size)
-                )  # type: ignore[attr-defined]
+                )
 
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
+
+
+# =====================================================
+# 새로운 함수들: GFPGAN, Real-ESRGAN, SimSwap, FOMM 처리 함수
+# =====================================================
+
+# (a) GFPGAN 적용 함수 추가
+from gfpgan import GFPGANer
+
+def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
+    gfpgan = GFPGANer(model_path='gfpgan.pth', upscale=2)
+    
+    cap = cv2.VideoCapture(input_video)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # GFPGAN 처리
+        _, restored_frame, _ = gfpgan.enhance(frame, paste_back=True)
+        out.write(restored_frame)
+    
+    cap.release()
+    out.release()
+
+# (b) Real-ESRGAN 적용 함수 수정
+from realesrgan import RealESRGAN
+
+def enhance_video_with_realesrgan(input_video: str, output_video: str, scale: int = 2, device: str = 'cuda') -> None:
+    model = RealESRGAN(device, scale=scale)
+    model_path = f'RealESRGAN_x{scale}.pth'
+    if not os.path.exists(model_path):
+        print(f"{model_path} not found. Please download the model file manually.")
+        return
+    model.load_weights(model_path)
+
+    cap = cv2.VideoCapture(input_video)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * scale
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) * scale
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        sr_frame = model.predict(frame)
+        out.write(sr_frame)
+
+    cap.release()
+    out.release()
+
+# (c) SimSwap 및 FOMM 함수 추가 (Wrapper 함수)
+def process_video_with_simswap(source_image: str, target_video: str, output_video: str) -> None:
+    # 예시: SimSwap의 test_video_swapsingle.py 스크립트를 모듈로 호출하는 방식
+    from SimSwap.test_video_swapsingle import swap_video
+    swap_video(source_img=source_image, target_video=target_video, output_path=output_video)
+
+def apply_fomm(source_image: str, input_video: str, output_video: str) -> None:
+    # 예시: FOMM 데모 함수를 호출 (실제 인터페이스에 맞게 수정 필요)
+    from first_order_model.demo import first_order_motion
+    first_order_motion(source_image, input_video, output_video)
 
