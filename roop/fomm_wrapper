@@ -1,0 +1,55 @@
+# roop/fomm_wrapper.py
+
+import imageio
+import numpy as np
+from skimage.transform import resize
+from skimage import img_as_ubyte
+import torch
+
+# first-order-model 저장소의 demo.py에 정의된 함수를 가져옵니다.
+# 단, 프로젝트 루트에 first_order_model 폴더를 클론해 두어야 합니다.
+try:
+    from first_order_model.demo import load_checkpoints, make_animation
+except ImportError as e:
+    raise ImportError("first_order_model 모듈을 찾을 수 없습니다. "
+                      "프로젝트 루트에 'first_order_model' 폴더를 클론했는지 확인하세요.")
+
+def first_order_motion(source_image_path, driving_video_path, result_video_path,
+                       config_path, checkpoint_path, cpu=False):
+    """
+    FOMM을 이용해 source 이미지와 driving video로부터 애니메이션을 생성하여
+    result_video_path에 저장하는 함수입니다.
+    
+    인자:
+      - source_image_path: source 이미지 파일 경로 (예: 'sup-mat/source.png')
+      - driving_video_path: driving video 파일 경로 (예: 'driving.mp4')
+      - result_video_path: 결과 영상 파일 경로 (예: 'result.mp4')
+      - config_path: 모델 설정 파일 경로 (예: 'config/vox-256.yaml')
+      - checkpoint_path: 체크포인트 파일 경로 (예: 'checkpoints/vox-cpk.pth.tar')
+      - cpu: True이면 CPU 모드로 실행 (기본값: False)
+    """
+    # 1. source 이미지 로드
+    source_image = imageio.imread(source_image_path)
+    
+    # 2. driving video 프레임 읽기
+    reader = imageio.get_reader(driving_video_path)
+    driving_video = []
+    for frame in reader:
+        driving_video.append(frame)
+    reader.close()
+    
+    # 3. 전처리: source 이미지와 driving video의 크기를 256x256으로 조정 (예시)
+    source_image = resize(source_image, (256, 256))[..., :3]
+    driving_video = [resize(frame, (256, 256))[..., :3] for frame in driving_video]
+    
+    # 4. 모델 로드: 체크포인트를 이용해 generator와 keypoint detector 로드
+    generator, kp_detector = load_checkpoints(config_path, checkpoint_path, cpu=cpu)
+    
+    # 5. 애니메이션 생성
+    # relative와 adapt_movement_scale 옵션은 필요에 따라 조정할 수 있습니다.
+    predictions = make_animation(source_image, driving_video, generator, kp_detector,
+                                 relative=False, adapt_movement_scale=False, cpu=cpu)
+    
+    # 6. 결과 영상을 저장 (fps는 25로 고정, 필요시 driving video의 메타데이터에서 가져올 수 있음)
+    fps = 25
+    imageio.mimsave(result_video_path, [img_as_ubyte(frame) for frame in predictions], fps=fps)
