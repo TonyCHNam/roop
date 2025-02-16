@@ -23,9 +23,9 @@ import roop.ui as ui
 from roop.predictor import predict_image, predict_video
 from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import (
-    has_image_extension, is_image, is_video, detect_fps, create_video, 
-    extract_frames, get_temp_frame_paths, restore_audio, create_temp, 
-    move_temp, clean_temp, normalize_output_path, enhance_video
+    has_image_extension, is_image, is_video, detect_fps, create_video,
+    extract_frames, get_temp_frame_paths, restore_audio, create_temp,
+    move_temp, clean_temp, normalize_output_path
 )
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
@@ -193,6 +193,7 @@ def process_video_with_simswap(source_image: str, target_video: str, output_vide
         swap_video(source_img=source_image, target_video=target_video, output_path=output_video)
     except Exception as e:
         print(f"SimSwap 처리 중 오류 발생: {e}")
+        import sys
         sys.exit(1)
 
 
@@ -204,7 +205,6 @@ def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
         from gfpgan import GFPGANer
         gfpgan = GFPGANer(model_path='gfpgan.pth', upscale=2)
     
-        import cv2
         cap = cv2.VideoCapture(input_video)
         fps = cap.get(cv2.CAP_PROP_FPS)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -225,6 +225,7 @@ def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
         out.release()
     except Exception as e:
         print(f"GFPGAN 처리 중 오류 발생: {e}")
+        import sys
         sys.exit(1)
 
 
@@ -244,6 +245,7 @@ def apply_fomm(source_image: str, input_video: str, output_video: str) -> None:
         first_order_motion(source_image, input_video, output_video, config_path, checkpoint_path, cpu=False)
     except Exception as e:
         print(f"FOMM 처리 중 오류 발생: {e}")
+        import sys
         sys.exit(1)
 
 
@@ -252,12 +254,12 @@ def enhance_video_with_realesrgan(input_video: str, output_video: str, scale: in
     Real-ESRGAN을 사용하여 input_video를 해상도 업스케일 처리한 후 output_video로 저장합니다.
     """
     try:
-        from realesrgan import RealESRGAN
-        import cv2
-        model = RealESRGAN(device, scale=scale)
+        from realesrgan import RealESRGANer
+        model = RealESRGANer(device, scale=scale)
         model_path = f'RealESRGAN_x{scale}.pth'
         if not os.path.exists(model_path):
             print(f"{model_path} 파일이 존재하지 않습니다. 모델 파일을 수동으로 다운로드하세요.")
+            import sys
             sys.exit(1)
         model.load_weights(model_path)
     
@@ -280,4 +282,5 @@ def enhance_video_with_realesrgan(input_video: str, output_video: str, scale: in
         out.release()
     except Exception as e:
         print(f"Real-ESRGAN 처리 중 오류 발생: {e}")
+        import sys
         sys.exit(1)
