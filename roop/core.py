@@ -189,7 +189,7 @@ def process_video_with_simswap(source_image: str, target_video: str, output_vide
     이 함수는 외부 SimSwap 모듈의 swap_video() 함수를 호출합니다.
     """
     try:
-        from simswap.test_video_swapsingle import swap_video
+        from SimSwap.test_video_swapsingle import swap_video
         swap_video(source_img=source_image, target_video=target_video, output_path=output_video)
     except Exception as e:
         print(f"SimSwap 처리 중 오류 발생: {e}")
