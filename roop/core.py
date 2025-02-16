@@ -135,7 +135,6 @@ def update_status(message: str, scope: str = 'ROOP.CORE') -> None:
 
 
 def start() -> None:
-    # 기존 프레임 추출 및 영상 생성 단계 (필요한 경우 그대로 유지)
     # 1. SimSwap 기반 얼굴 스왑 진행
     initial_output = roop.globals.output_path  # 예: output.mp4
     print("SimSwap 처리 중...")
