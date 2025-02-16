@@ -217,7 +217,7 @@ def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
             ret, frame = cap.read()
             if not ret:
                 break
-            # GFPGAN 처리: enhance() 함수의 리턴 값에 따라 수정 필요
+            # GFPGAN 처리
             _, restored_frame, _ = gfpgan.enhance(frame, paste_back=True)
             out.write(restored_frame)
     
@@ -231,11 +231,17 @@ def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
 def apply_fomm(source_image: str, input_video: str, output_video: str) -> None:
     """
     FOMM을 사용하여 input_video에 대한 얼굴 움직임 및 표정 보정을 진행하고 output_video로 저장합니다.
-    이 함수는 FOMM 데모 스크립트의 first_order_motion() 함수를 호출합니다.
+    이 함수는 프로젝트 내에 새로 만든 래퍼 함수 first_order_motion을 호출합니다.
     """
     try:
-        from first_order_model.demo import first_order_motion
-        first_order_motion(source_image, input_video, output_video)
+        from roop.fomm_wrapper import first_order_motion
+        
+        # config_path와 checkpoint_path는 프로젝트 환경에 맞게 지정합니다.
+        config_path = "config/vox-256.yaml"          # 예시: 설정 파일 경로
+        checkpoint_path = "checkpoints/vox-cpk.pth.tar"  # 예시: 체크포인트 파일 경로
+        
+        # first_order_motion 함수 호출
+        first_order_motion(source_image, input_video, output_video, config_path, checkpoint_path, cpu=False)
     except Exception as e:
         print(f"FOMM 처리 중 오류 발생: {e}")
         sys.exit(1)
