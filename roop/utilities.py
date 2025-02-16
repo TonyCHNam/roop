@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
 
-from realesrgan import RealESRGAN  # pip install realesrgan
+from realesrgan import RealESRGANer
 
 import roop.globals
 
@@ -209,7 +209,7 @@ def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
 from realesrgan import RealESRGAN
 
 def enhance_video_with_realesrgan(input_video: str, output_video: str, scale: int = 2, device: str = 'cuda') -> None:
-    model = RealESRGAN(device, scale=scale)
+    model = RealESRGANer(device, scale=scale)
     model_path = f'RealESRGAN_x{scale}.pth'
     if not os.path.exists(model_path):
         print(f"{model_path} not found. Please download the model file manually.")
