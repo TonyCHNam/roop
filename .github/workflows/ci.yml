@@ -43,10 +43,17 @@ jobs:
       - name: Install additional dependencies
         run: |
           pip install -r requirements.txt
-          pip install gfpgan==1.3.8 realesrgan==0.3.0 simswap first_order_model
+          pip install gfpgan==1.3.8 realesrgan==0.3.0 simswap
+        # 주의: first_order_model은 pip 설치 대신, 별도 클론/설치 가이드로 안내합니다.
 
       - name: Force reinstall TensorFlow 2.13.0
         run: pip install tensorflow==2.13.0 --force-reinstall
+
+      - name: Clone SimSwap repository
+        run: git clone https://github.com/neuralchen/SimSwap.git SimSwap
+
+      - name: Set PYTHONPATH for SimSwap
+        run: echo "PYTHONPATH=${{ github.workspace }}/SimSwap:$PYTHONPATH" >> $GITHUB_ENV
 
       - name: Run roop in headless mode (non-Windows)
         run: python run.py -s .github/examples/source.jpg -t .github/examples/target.mp4 -o .github/examples/output.mp4
