@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
 
-from realesrgan import RealESRGANer
+# 새로 추가: RealESRGANer를 사용합니다.
+from realesrgan import RealESRGANer  # pip install realesrgan
 
 import roop.globals
 
@@ -27,6 +28,7 @@ TEMP_VIDEO_FILE = 'temp.mp4'
 if platform.system().lower() == 'darwin':
     ssl._create_default_https_context = ssl._create_unverified_context
 
+
 def run_ffmpeg(args: List[str]) -> bool:
     commands = ['ffmpeg', '-hide_banner', '-loglevel', roop.globals.log_level]
     commands.extend(args)
@@ -36,6 +38,7 @@ def run_ffmpeg(args: List[str]) -> bool:
     except Exception:
         pass
     return False
+
 
 def detect_fps(target_path: str) -> float:
     command = [
@@ -53,6 +56,7 @@ def detect_fps(target_path: str) -> float:
         pass
     return 30
 
+
 def extract_frames(target_path: str, fps: float = 30) -> bool:
     temp_directory_path = get_temp_directory_path(target_path)
     temp_frame_quality = roop.globals.temp_frame_quality * 31 // 100
@@ -64,6 +68,7 @@ def extract_frames(target_path: str, fps: float = 30) -> bool:
         '-vf', 'fps=' + str(fps),
         os.path.join(temp_directory_path, '%04d.' + roop.globals.temp_frame_format)
     ])
+
 
 def create_video(target_path: str, fps: float = 30) -> bool:
     """
@@ -89,6 +94,7 @@ def create_video(target_path: str, fps: float = 30) -> bool:
     ]
     return run_ffmpeg(commands)
 
+
 def restore_audio(target_path: str, output_path: str) -> None:
     temp_output_path = get_temp_output_path(target_path)
     done = run_ffmpeg([
@@ -102,18 +108,22 @@ def restore_audio(target_path: str, output_path: str) -> None:
     if not done:
         move_temp(target_path, output_path)
 
+
 def get_temp_frame_paths(target_path: str) -> List[str]:
     temp_directory_path = get_temp_directory_path(target_path)
     return glob.glob(os.path.join(glob.escape(temp_directory_path), '*.' + roop.globals.temp_frame_format))
+
 
 def get_temp_directory_path(target_path: str) -> str:
     target_name, _ = os.path.splitext(os.path.basename(target_path))
     target_directory_path = os.path.dirname(target_path)
     return os.path.join(target_directory_path, TEMP_DIRECTORY, target_name)
 
+
 def get_temp_output_path(target_path: str) -> str:
     temp_directory_path = get_temp_directory_path(target_path)
     return os.path.join(temp_directory_path, TEMP_VIDEO_FILE)
+
 
 def normalize_output_path(source_path: str, target_path: str, output_path: str) -> Optional[str]:
     if source_path and target_path and output_path:
@@ -123,9 +133,11 @@ def normalize_output_path(source_path: str, target_path: str, output_path: str) 
             return os.path.join(output_path, source_name + '-' + target_name + target_extension)
     return output_path
 
+
 def create_temp(target_path: str) -> None:
     temp_directory_path = get_temp_directory_path(target_path)
     Path(temp_directory_path).mkdir(parents=True, exist_ok=True)
+
 
 def move_temp(target_path: str, output_path: str) -> None:
     temp_output_path = get_temp_output_path(target_path)
@@ -133,6 +145,7 @@ def move_temp(target_path: str, output_path: str) -> None:
         if os.path.isfile(output_path):
             os.remove(output_path)
         shutil.move(temp_output_path, output_path)
+
 
 def clean_temp(target_path: str) -> None:
     temp_directory_path = get_temp_directory_path(target_path)
@@ -142,8 +155,10 @@ def clean_temp(target_path: str) -> None:
     if os.path.exists(parent_directory_path) and not os.listdir(parent_directory_path):
         os.rmdir(parent_directory_path)
 
+
 def has_image_extension(image_path: str) -> bool:
     return image_path.lower().endswith(('png', 'jpg', 'jpeg', 'webp'))
+
 
 def is_image(image_path: str) -> bool:
     if image_path and os.path.isfile(image_path):
@@ -151,11 +166,13 @@ def is_image(image_path: str) -> bool:
         return bool(mimetype and mimetype.startswith('image/'))
     return False
 
+
 def is_video(video_path: str) -> bool:
     if video_path and os.path.isfile(video_path):
         mimetype, _ = mimetypes.guess_type(video_path)
         return bool(mimetype and mimetype.startswith('video/'))
     return False
+
 
 def conditional_download(download_directory_path: str, urls: List[str]) -> None:
     if not os.path.exists(download_directory_path):
@@ -171,6 +188,7 @@ def conditional_download(download_directory_path: str, urls: List[str]) -> None:
                     download_file_path,
                     reporthook=lambda count, block_size, total_size: progress.update(block_size)
                 )
+
 
 def resolve_relative_path(path: str) -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), path))
@@ -193,7 +211,7 @@ def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
     
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
-
+    
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -205,43 +223,66 @@ def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
     cap.release()
     out.release()
 
-# (b) Real-ESRGAN 적용 함수 수정
-from realesrgan import RealESRGAN
 
+# (b) Real-ESRGAN 적용 함수 수정 (RealESRGANer 사용)
 def enhance_video_with_realesrgan(input_video: str, output_video: str, scale: int = 2, device: str = 'cuda') -> None:
     model = RealESRGANer(device, scale=scale)
     model_path = f'RealESRGAN_x{scale}.pth'
     if not os.path.exists(model_path):
-        print(f"{model_path} not found. Please download the model file manually.")
-        return
+        print(f"{model_path} 파일이 존재하지 않습니다. 모델 파일을 수동으로 다운로드하세요.")
+        import sys
+        sys.exit(1)
     model.load_weights(model_path)
-
+    
     cap = cv2.VideoCapture(input_video)
     fps = cap.get(cv2.CAP_PROP_FPS)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * scale
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) * scale
-
+    
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
-
+    
     while True:
         ret, frame = cap.read()
         if not ret:
             break
         sr_frame = model.predict(frame)
         out.write(sr_frame)
-
+    
     cap.release()
     out.release()
 
+
 # (c) SimSwap 및 FOMM 함수 추가 (Wrapper 함수)
 def process_video_with_simswap(source_image: str, target_video: str, output_video: str) -> None:
-    # 예시: SimSwap의 test_video_swapsingle.py 스크립트를 모듈로 호출하는 방식
-    from SimSwap.test_video_swapsingle import swap_video
-    swap_video(source_img=source_image, target_video=target_video, output_path=output_video)
+    """
+    SimSwap을 사용하여 source_image와 target_video를 기반으로 얼굴 스왑을 진행합니다.
+    이 함수는 외부 SimSwap 모듈의 swap_video() 함수를 호출합니다.
+    """
+    try:
+        from SimSwap.test_video_swapsingle import swap_video
+        swap_video(source_img=source_image, target_video=target_video, output_path=output_video)
+    except Exception as e:
+        print(f"SimSwap 처리 중 오류 발생: {e}")
+        import sys
+        sys.exit(1)
+
 
 def apply_fomm(source_image: str, input_video: str, output_video: str) -> None:
-    # 예시: FOMM 데모 함수를 호출 (실제 인터페이스에 맞게 수정 필요)
-    from first_order_model.demo import first_order_motion
-    first_order_motion(source_image, input_video, output_video)
-
+    """
+    FOMM을 사용하여 input_video에 대한 얼굴 움직임 및 표정 보정을 진행하고 output_video로 저장합니다.
+    이 함수는 프로젝트 내에 새로 만든 래퍼 함수 first_order_motion을 호출합니다.
+    """
+    try:
+        from roop.fomm_wrapper import first_order_motion
+        
+        # config_path와 checkpoint_path는 프로젝트 환경에 맞게 지정합니다.
+        config_path = "config/vox-256.yaml"          # 예시: 설정 파일 경로
+        checkpoint_path = "checkpoints/vox-cpk.pth.tar"  # 예시: 체크포인트 파일 경로
+        
+        # first_order_motion 함수 호출
+        first_order_motion(source_image, input_video, output_video, config_path, checkpoint_path, cpu=False)
+    except Exception as e:
+        print(f"FOMM 처리 중 오류 발생: {e}")
+        import sys
+        sys.exit(1)
