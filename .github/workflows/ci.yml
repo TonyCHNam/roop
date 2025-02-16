@@ -1,6 +1,6 @@
 name: ci
 
-on: [ push, pull_request ]
+on: [push, pull_request]
 
 jobs:
   lint:
@@ -12,10 +12,13 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.9
-      - run: pip install flake8
-      - run: pip install mypy
-      - run: flake8 run.py roop
-      - run: mypy run.py roop
+      - name: Install flake8 and mypy
+        run: |
+          pip install flake8 mypy
+      - name: Lint with flake8
+        run: flake8 run.py roop
+      - name: Type-check with mypy
+        run: mypy run.py roop
 
   test:
     strategy:
@@ -25,31 +28,49 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
       - name: Set up ffmpeg
         uses: FedericoCarboni/setup-ffmpeg@v2
+
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
           python-version: 3.9
+
       - name: Install dependencies from headless requirements
         run: pip install -r requirements-headless.txt
+
+      - name: Install additional dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install gfpgan==1.3.8 realesrgan==0.3.0 simswap first_order_model
+
       - name: Force reinstall TensorFlow 2.13.0
         run: pip install tensorflow==2.13.0 --force-reinstall
+
       - name: Run roop in headless mode (non-Windows)
         run: python run.py -s .github/examples/source.jpg -t .github/examples/target.mp4 -o .github/examples/output.mp4
         if: matrix.os != 'windows-latest'
+
       - name: Run roop in headless mode (Windows)
         run: python run.py -s .github\examples\source.jpg -t .github\examples\target.mp4 -o .github\examples\output.mp4
         if: matrix.os == 'windows-latest'
+
       - name: Evaluate PSNR (non-Windows)
         run: ffmpeg -i .github/examples/snapshot.mp4 -i .github/examples/output.mp4 -filter_complex psnr -f null -
         if: matrix.os != 'windows-latest'
+
       - name: Evaluate PSNR (Windows)
         run: ffmpeg -i .github\examples\snapshot.mp4 -i .github\examples\output.mp4 -filter_complex psnr -f null -
         if: matrix.os == 'windows-latest'
-  - run: python run.py -s .github\examples\source.jpg -t .github\examples\target.mp4 -o .github\examples\output.mp4
-    if: matrix.os == 'windows-latest'
-  - run: ffmpeg -i .github/examples/snapshot.mp4 -i .github/examples/output.mp4 -filter_complex psnr -f null -
-    if: matrix.os != 'windows-latest'
-  - run: ffmpeg -i .github\examples\snapshot.mp4 -i .github\examples\output.mp4 -filter_complex psnr -f null -
-    if: matrix.os == 'windows-latest'
+
+      - name: Evaluate SSIM (non-Windows)
+        run: ffmpeg -i .github/examples/snapshot.mp4 -i .github/examples/output.mp4 -filter_complex ssim -f null -
+        if: matrix.os != 'windows-latest'
+
+      - name: Evaluate SSIM (Windows)
+        run: ffmpeg -i .github\examples\snapshot.mp4 -i .github\examples\output.mp4 -filter_complex ssim -f null -
+        if: matrix.os == 'windows-latest'
+
+      - name: Apply Super Resolution using Real-ESRGAN
+        run: python -m realesrgan --input .github/examples/output.mp4 --output .github/examples/output_4K.mp4 --scale 2
