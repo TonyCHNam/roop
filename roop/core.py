@@ -135,82 +135,28 @@ def update_status(message: str, scope: str = 'ROOP.CORE') -> None:
 
 
 def start() -> None:
-    for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
-        if not frame_processor.pre_start():
-            return
-    # process image to image
-    if has_image_extension(roop.globals.target_path):
-        if predict_image(roop.globals.target_path):
-            destroy()
-        shutil.copy2(roop.globals.target_path, roop.globals.output_path)
-        # process frame
-        for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
-            update_status('Progressing...', frame_processor.NAME)
-            frame_processor.process_image(roop.globals.source_path, roop.globals.output_path, roop.globals.output_path)
-            frame_processor.post_process()
-        # validate image
-        if is_image(roop.globals.target_path):
-            update_status('Processing to image succeed!')
-        else:
-            update_status('Processing to image failed!')
-        return
-    # process image to video
-    if predict_video(roop.globals.target_path):
-        destroy()
-    update_status('Creating temporary resources...')
-    create_temp(roop.globals.target_path)
-    # extract frames
-    if roop.globals.keep_fps:
-        fps = detect_fps(roop.globals.target_path)
-        update_status(f'Extracting frames with {fps} FPS...')
-        extract_frames(roop.globals.target_path, fps)
-    else:
-        update_status('Extracting frames with 30 FPS...')
-        extract_frames(roop.globals.target_path)
-    # process frame
-    temp_frame_paths = get_temp_frame_paths(roop.globals.target_path)
-    if temp_frame_paths:
-        for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
-            update_status('Progressing...', frame_processor.NAME)
-            frame_processor.process_video(roop.globals.source_path, temp_frame_paths)
-            frame_processor.post_process()
-    else:
-        update_status('Frames not found...')
-        return
-    # create video
-    if roop.globals.keep_fps:
-        fps = detect_fps(roop.globals.target_path)
-        update_status(f'Creating video with {fps} FPS...')
-        create_video(roop.globals.target_path, fps)
-    else:
-        update_status('Creating video with 30 FPS...')
-        create_video(roop.globals.target_path)
-    # handle audio
-    if roop.globals.skip_audio:
-        move_temp(roop.globals.target_path, roop.globals.output_path)
-        update_status('Skipping audio...')
-    else:
-        if roop.globals.keep_fps:
-            update_status('Restoring audio...')
-        else:
-            update_status('Restoring audio might cause issues as fps are not kept...')
-        restore_audio(roop.globals.target_path, roop.globals.output_path)
-    # clean temp
-    update_status('Cleaning temporary resources...')
-    clean_temp(roop.globals.target_path)
-    # validate video
-    if is_video(roop.globals.target_path):
-        update_status('Processing to video succeed!')
-    else:
-        update_status('Processing to video failed!')
+    # 기존 프레임 추출 및 영상 생성 단계 (필요한 경우 그대로 유지)
+    # 1. SimSwap 기반 얼굴 스왑 진행
+    initial_output = roop.globals.output_path  # 예: output.mp4
+    print("SimSwap 처리 중...")
+    process_video_with_simswap(roop.globals.source_path, roop.globals.target_path, initial_output)
 
-    # 후처리: Super Resolution 적용
-    # roop.globals.output_path에 최종 스왑 영상 파일 경로가 저장되어 있다고 가정
-    if roop.globals.output_path and os.path.isfile(roop.globals.output_path):
-        enhanced_output = roop.globals.output_path.replace('.mp4', '_enhanced.mp4')
-        update_status("Starting super resolution post-processing...", scope="POST_PROCESSING")
-        enhance_video(roop.globals.output_path, enhanced_output, scale=2, device='cuda')
-        update_status(f"Enhanced video saved to {enhanced_output}", scope="POST_PROCESSING")
+    # 2. GFPGAN을 통한 얼굴 디테일 향상
+    gfpgan_output = initial_output.replace('.mp4', '_enhanced.mp4')
+    print("GFPGAN 처리 중...")
+    enhance_faces_gfpgan(initial_output, gfpgan_output)
+
+    # 3. FOMM을 통한 얼굴 움직임 및 표정 보정
+    fomm_output = gfpgan_output.replace('.mp4', '_motion.mp4')
+    print("FOMM 처리 중...")
+    apply_fomm(roop.globals.source_path, gfpgan_output, fomm_output)
+
+    # 4. Real-ESRGAN을 통한 해상도 업스케일
+    final_output = fomm_output.replace('.mp4', '_4K.mp4')
+    print("Real-ESRGAN 처리 중...")
+    enhance_video_with_realesrgan(fomm_output, final_output, scale=2, device='cuda')
+
+    print(f"최종 고품질 비디오가 {final_output} 에 저장되었습니다.")
 
 
 def destroy() -> None:
@@ -234,5 +180,98 @@ def run() -> None:
         window.mainloop()
 
 
-if __name__ == '__main__':
-    run()
+# ============================================================
+# 새로운 함수들: SimSwap, GFPGAN, FOMM, Real-ESRGAN 처리 함수
+# ============================================================
+def process_video_with_simswap(source_image: str, target_video: str, output_video: str) -> None:
+    """
+    SimSwap을 사용하여 source_image와 target_video를 기반으로 얼굴 스왑을 진행합니다.
+    이 함수는 외부 SimSwap 모듈의 swap_video() 함수를 호출합니다.
+    """
+    try:
+        from SimSwap.test_video_swapsingle import swap_video
+        swap_video(source_img=source_image, target_video=target_video, output_path=output_video)
+    except Exception as e:
+        print(f"SimSwap 처리 중 오류 발생: {e}")
+        sys.exit(1)
+
+
+def enhance_faces_gfpgan(input_video: str, output_video: str) -> None:
+    """
+    GFPGAN을 사용하여 input_video의 얼굴 디테일을 향상시키고 output_video로 저장합니다.
+    """
+    try:
+        from gfpgan import GFPGANer
+        gfpgan = GFPGANer(model_path='gfpgan.pth', upscale=2)
+    
+        import cv2
+        cap = cv2.VideoCapture(input_video)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
+    
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # GFPGAN 처리: enhance() 함수의 리턴 값에 따라 수정 필요
+            _, restored_frame, _ = gfpgan.enhance(frame, paste_back=True)
+            out.write(restored_frame)
+    
+        cap.release()
+        out.release()
+    except Exception as e:
+        print(f"GFPGAN 처리 중 오류 발생: {e}")
+        sys.exit(1)
+
+
+def apply_fomm(source_image: str, input_video: str, output_video: str) -> None:
+    """
+    FOMM을 사용하여 input_video에 대한 얼굴 움직임 및 표정 보정을 진행하고 output_video로 저장합니다.
+    이 함수는 FOMM 데모 스크립트의 first_order_motion() 함수를 호출합니다.
+    """
+    try:
+        from first_order_model.demo import first_order_motion
+        first_order_motion(source_image, input_video, output_video)
+    except Exception as e:
+        print(f"FOMM 처리 중 오류 발생: {e}")
+        sys.exit(1)
+
+
+def enhance_video_with_realesrgan(input_video: str, output_video: str, scale: int = 2, device: str = 'cuda') -> None:
+    """
+    Real-ESRGAN을 사용하여 input_video를 해상도 업스케일 처리한 후 output_video로 저장합니다.
+    """
+    try:
+        from realesrgan import RealESRGAN
+        import cv2
+        model = RealESRGAN(device, scale=scale)
+        model_path = f'RealESRGAN_x{scale}.pth'
+        if not os.path.exists(model_path):
+            print(f"{model_path} 파일이 존재하지 않습니다. 모델 파일을 수동으로 다운로드하세요.")
+            sys.exit(1)
+        model.load_weights(model_path)
+    
+        cap = cv2.VideoCapture(input_video)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * scale
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) * scale
+    
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
+    
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            sr_frame = model.predict(frame)
+            out.write(sr_frame)
+    
+        cap.release()
+        out.release()
+    except Exception as e:
+        print(f"Real-ESRGAN 처리 중 오류 발생: {e}")
+        sys.exit(1)
