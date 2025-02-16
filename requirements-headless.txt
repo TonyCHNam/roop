@@ -14,4 +14,3 @@ tqdm==4.65.0
 # 추가된 항목
 gfpgan==1.3.8
 realesrgan==0.3.0
-simswap
