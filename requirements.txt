@@ -23,4 +23,3 @@ mediapipe==0.10.21
 
 # 추가된 항목
 simswap
-git+https://github.com/AliaksandrSiarohin/first-order-model.git#egg=first_order_model
